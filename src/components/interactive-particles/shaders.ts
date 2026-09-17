@@ -108,32 +108,45 @@ export const particleFrag = /* glsl */ `
 precision highp float;
 
 uniform sampler2D uTexture;
+uniform sampler2D uTouch;
+uniform float uTime;
 
 varying vec2 vPUv;
 varying vec2 vUv;
 
+vec3 hsv2rgb(vec3 c) {
+	vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+	return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
 void main() {
-	vec4 color = vec4(0.0);
 	vec2 uv = vUv;
 	vec2 puv = vPUv;
 
 	// pixel color
 	vec4 colA = texture2D(uTexture, puv);
-
-	// greyscale
 	float grey = colA.r * 0.21 + colA.g * 0.71 + colA.b * 0.07;
-	vec4 colB = vec4(grey, grey, grey, 1.0);
+
+	// animated spectrum: hue flows diagonally across the image over time
+	float hue = fract(puv.x * 0.55 + puv.y * 0.35 + uTime * 0.06);
+	float sat = 0.75;
+	float val = mix(0.45, 1.0, grey);
+
+	// touch adds a hot, saturated flare around the cursor trail
+	float t = texture2D(uTouch, puv).r;
+	hue = fract(hue + t * 0.25);
+	sat = mix(sat, 1.0, t);
+	val = mix(val, 1.0, t * 0.8);
+
+	vec3 rgb = hsv2rgb(vec3(hue, sat, val));
 
 	// circle
 	float border = 0.3;
 	float radius = 0.5;
 	float dist = radius - distance(uv, vec2(0.5));
-	float t = smoothstep(0.0, border, dist);
+	float alpha = smoothstep(0.0, border, dist);
 
-	// final color
-	color = colB;
-	color.a = t;
-
-	gl_FragColor = color;
+	gl_FragColor = vec4(rgb, alpha);
 }
 `;
